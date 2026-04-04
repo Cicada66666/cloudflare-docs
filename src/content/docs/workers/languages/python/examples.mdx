@@ -4,6 +4,7 @@ title: Examples
 head:
   - tag: title
     content: Python Worker Examples
+reviewed: 2024-04-03
 ---
 
 Cloudflare has a wide range of Python examples in the [Workers Example gallery](/workers/examples/?languages=Python).
@@ -70,6 +71,29 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request):
         name = (await request.json()).name
         return Response("Hello, {name}".format(name=name))
+```
+
+## Read bundled asset files in your Worker
+
+Let's say your Worker has the following structure:
+
+```
+├── src
+│   ├── file.html
+│   └── main.py
+└── wrangler.jsonc
+```
+
+In order to read a file in your Worker, you would do the following:
+
+```python
+from pathlib import Path
+from workers import WorkerEntrypoint, Response
+
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        html_file = Path(__file__).parent / "file.html"
+        return Response(html_file.read_text(), headers={"Content-Type": "text/html"})
 ```
 
 ## Emit logs from your Python Worker
@@ -189,20 +213,20 @@ from workers import WorkflowEntrypoint
 
 class MyWorkflow(WorkflowEntrypoint):
     async def run(self, event, step):
-        @step.do("dependency a")
+        @step.do()
         async def step_a():
             # do some work
             return 10
 
-        @step.do("dependency b")
+        @step.do()
         async def step_b():
             # do some work
             return 20
 
-        @step.do("my final step", depends=[step_a, step_b], concurrent=True)
-        async def my_final_step(result_a=0, result_b=0):
+        @step.do(concurrent=True)
+        async def my_final_step(step_a, step_b):
             # should return 30
-            return result_a + result_b
+            return step_a + step_b
 
         await my_final_step()
 ```

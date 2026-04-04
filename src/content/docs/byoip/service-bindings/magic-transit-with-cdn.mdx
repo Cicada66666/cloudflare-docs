@@ -27,14 +27,18 @@ It is important to note that traffic routed to the CDN pipeline is protected at 
 
 ## Before you begin
 
-<Render
-	file="service-bindings-prereqs"
-	product="byoip"
-	params={{
-		pre_existing_product: "Magic Transit",
-		added_product: "CDN",
-	}}
-/>
+- Make sure your contract includes CDN according to your needs. If you find any issues related to subscription when following the steps below, reach out to your account team.
+
+- Plan for what IPs will be used:
+
+  <Render
+  	file="service-bindings-prereqs"
+  	product="byoip"
+  	params={{
+  		pre_existing_product: "Magic Transit",
+  		added_product: "CDN",
+  	}}
+  />
 
 ## 1. Get account information
 
@@ -47,7 +51,7 @@ It is important to note that traffic routed to the CDN pipeline is protected at 
 	}}
 />
 
-## 2. Create service binding
+## 2. Create service bindings
 
 <Render
 	file="service-bindings-create-binding"
@@ -67,8 +71,8 @@ You can choose between two different scopes:
 - Account-level: uses the address map for all proxied DNS records across all of the zones within an account.
 - Zone-level: uses the address map for all proxied DNS records within a zone.
 
-:::note
-If you need to map only specific subdomains (and not all proxied DNS records) to specific IP addresses, you can use a [Subdomain setup](/dns/zone-setups/subdomain-setup/).
+:::tip
+If you need to map only specific subdomains (and not all proxied DNS records) to specific IP addresses, you can use a zone on [Subdomain setup](/dns/zone-setups/subdomain-setup/).
 :::
 
 <Tabs syncKey="dashPlusAPI">
@@ -118,11 +122,11 @@ To create records with the API, use a [POST request](/api/resources/dns/subresou
 </TabItem>
 </Tabs>
 
-:::note
+:::tip
 As you create the necessary DNS records, [Total TLS](/ssl/edge-certificates/additional-options/total-tls/) can help making sure that you have SSL/TLS certificates in place for all your hostnames.
 :::
 
-While the DNS record proxy status and address map will determine how Cloudflare's authoritative DNS responds to requests for your hostnames, the IP addresses specified in `A`/`AAAA` records will determine [how Cloudflare reaches the configured origin](/fundamentals/concepts/how-cloudflare-works/#how-cloudflare-works-as-a-reverse-proxy).
+While the DNS record proxy status and address map will determine how Cloudflare's authoritative DNS responds to requests for your hostnames, the IP addresses specified in `A`/`AAAA` records will determine [how Cloudflare reaches the configured origin](/fundamentals/concepts/how-cloudflare-works/#cloudflare-as-a-reverse-proxy).
 
 <Details header="Example">
 

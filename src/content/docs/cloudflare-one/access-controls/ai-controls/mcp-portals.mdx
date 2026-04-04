@@ -12,13 +12,19 @@ sidebar:
 
 import { Render, GlossaryTooltip } from "~/components";
 
-An MCP server portal centralizes multiple [Model Context Protocol (MCP) servers](https://www.cloudflare.com/learning/ai/what-is-model-context-protocol-mcp/) onto a single HTTP endpoint. Key benefits include:
+An MCP server portal centralizes multiple [Model Context Protocol (MCP) servers](https://www.cloudflare.com/learning/ai/what-is-model-context-protocol-mcp/) onto a single HTTP endpoint.
 
-- **Streamlined access to multiple MCP servers**: MCP server portals support both unauthenticated MCP servers (such as the [Cloudflare Documentation MCP server](https://github.com/cloudflare/mcp-server-cloudflare/tree/main/apps/docs-vectorize)) as well as MCP servers secured using any [third-party or custom OAuth provider](/agents/model-context-protocol/authorization/). Users log in to the portal URL through Cloudflare Access and are prompted to authenticate separately to each server that requires OAuth.
+![MCP clients connect through an MCP portal to access internal MCP servers and SaaS MCP servers.](~/assets/images/cloudflare-one/applications/mcp-portal.png)
+
+Key benefits include:
+
+- **Streamlined access to multiple MCP servers**: MCP server portals support both unauthenticated MCP servers and MCP servers secured using OAuth (for example, via [Access for SaaS](/cloudflare-one/access-controls/ai-controls/saas-mcp/) or a [third-party OAuth provider](/agents/model-context-protocol/authorization/)). Users log in to the portal URL through Cloudflare Access and are prompted to authenticate separately to each server that requires OAuth.
 
 - **Customized tools per portal**: Admins can tailor an MCP portal to a particular use case by choosing the specific tools and prompt templates that they want to make available to users through the portal. This allows users to access a curated set of tools and prompts — the less external context exposed to the AI model, the better the AI responses tend to be.
 
-- **Observability**: Once the user's AI agent is connected to the portal, Cloudflare Access logs the individual requests made using the tools in the portal.
+- **Observability**: Once the user's AI agent is connected to the portal, Cloudflare Access logs the individual requests made using the tools in the portal. You can optionally route portal traffic through [Cloudflare Gateway](#route-portal-traffic-through-gateway) for richer HTTP logging and data loss prevention (DLP) scanning.
+
+This guide explains how to add MCP servers to Cloudflare Access, create an MCP portal with customized tools and policies, and connect users to the portal using an MCP client.
 
 ## Prerequisites
 
@@ -37,7 +43,7 @@ To add an MCP server:
 3. Select **Add an MCP server**.
 4. Enter any name for the server.
 5. (Optional) Enter a custom string for the **Server ID**.
-6. In **HTTP URL**, enter the full URL of your MCP server. For example, if you want to add the [Cloudflare Documentation MCP server](https://github.com/cloudflare/mcp-server-cloudflare/tree/main/apps/docs-vectorize), enter `https://docs.mcp.cloudflare.com/sse`.
+6. In **HTTP URL**, enter the full URL of your MCP server. For example, if you want to add the [Cloudflare Documentation MCP server](https://github.com/cloudflare/mcp-server-cloudflare/tree/main/apps/docs-vectorize), enter `https://docs.mcp.cloudflare.com/mcp`.
 7. Add [Access policies](/cloudflare-one/access-controls/policies/) to show or hide the server in an [MCP server portal](#create-a-portal). The MCP server link will only appear in the portal for users who match an Allow policy. Users who do not pass an Allow policy will not see this server through any portals.
 
    :::caution
@@ -113,6 +119,38 @@ Cloudflare Access automatically creates an Access application for each MCP serve
    2. <Render file="access/access-block-page" product="cloudflare-one" />
 5. Select **Save application**.
 
+## Route portal traffic through Gateway
+
+When Gateway routing is turned on, calls to MCP servers protected by your MCP server portal appear in your [Gateway HTTP logs](/cloudflare-one/insights/logs/dashboard-logs/gateway-logs/) alongside the rest of your organization's HTTP traffic. You can then create [Data Loss prevention (DLP) policies](#example-gateway-policy) to detect and block sensitive data from leaving your users' devices and being sent to your upstream MCP servers.
+
+### Enable Gateway routing
+
+To route MCP server portal traffic through Gateway:
+
+1. In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Access controls** > **AI controls**
+2. Find the portal you want to configure, then select the three dots > **Edit**.
+3. Under **Basic information**, turn on **Route traffic through Cloudflare Gateway**.
+4. Select **Save**.
+
+Portal traffic will now appear in your [Gateway HTTP logs](/cloudflare-one/insights/logs/dashboard-logs/gateway-logs/). To apply DLP scanning, [create a Gateway HTTP policy](#example-gateway-policy).
+
+### Example Gateway policy
+
+To scan traffic for sensitive data, [create a Gateway HTTP policy](/cloudflare-one/data-loss-prevention/dlp-policies/) that matches both the MCP server and a predefined or custom [DLP profile](/cloudflare-one/data-loss-prevention/dlp-profiles/).
+
+Gateway HTTP policies for MCP portal traffic must explicitly target the MCP server — this differs from typical Gateway HTTP policies which apply to all inspected traffic. Ensure that your policy matches the upstream MCP server (for example, `https://example-mcp-server.example.workers.dev/mcp`) rather than the portal URL (`https://<subdomain>.<domain>/mcp`).
+
+For example, the following policy blocks traffic that contains [credentials and secrets](/cloudflare-one/data-loss-prevention/dlp-profiles/predefined-profiles/#credentials-and-secrets) or [financial information](/cloudflare-one/data-loss-prevention/dlp-profiles/predefined-profiles/#financial-information):
+
+| Selector         | Operator | Value         | Logic | Action |
+| ---------------- | -------- | ------------- | ----- | ------ |
+| Host      | in       | `example-mcp-server.example.workers.dev`  | And   | Block  |
+| DLP Profile | in       | _Credentials and Secrets_, _Financial Information_ |       |        |
+
+:::note
+DLP [AI prompt profiles](/cloudflare-one/data-loss-prevention/dlp-profiles/predefined-profiles/#ai-prompt) do not apply to MCP server portal traffic.
+:::
+
 ## Connect to a portal
 
 Users can connect to your MCP server running at `https://<subdomain>.<domain>/mcp` using [Workers AI Playground](https://playground.ai.cloudflare.com/), [MCP inspector](https://github.com/modelcontextprotocol/inspector), or [other MCP clients](/agents/guides/remote-mcp-server/#connect-your-mcp-server-to-claude-and-other-mcp-clients) that support remote MCP servers.
@@ -175,14 +213,24 @@ Portal logs allow you to monitor user activity through an MCP server portal. You
 | Capability | The tool used to process the request                |
 | Duration   | Processing time for the request in milliseconds     |
 
+### Export logs with Logpush
+
+:::note[Availability]
+Only available on Enterprise plans.
+:::
+
+You can automatically export MCP portal logs to third-party storage destinations or security information and event management (SIEM) tools using [Logpush](/logs/logpush/). This allows you to integrate with your existing security workflows and retain logs for as long as your business requires.
+
+To set up a Logpush job for MCP portal logs, refer to [Logpush integration](/cloudflare-one/insights/logs/logpush/). For a list of available log fields, refer to [MCP portal logs](/logs/logpush/logpush-job/datasets/account/mcp_portal_logs/).
+
 ## Troubleshooting
 
-### After authenticating to the Portal, my user receives the error "No allowed servers available, check your Zero Trust Policies"
+### After authenticating to the portal, my user receives the error `No allowed servers available, check your Zero Trust Policies`.
 
-1. A Portal and server must both have an attached policy. Ensure that any assigned servers to the Portal have their own associated policy.
-2. The server's admin authentication may be expired. Check that the server's status in the AI Controls dashboard is **Ready**.
+1. An MCP portal and server must both have an attached Access policy. Ensure that all MCP servers assigned to the portal have their own associated policy.
+2. The server's admin authentication may be expired. Check that the [server's status](#server-status) is **Ready**. If the status shows an error, [reauthenticate the server](#reauthenticate-the-mcp-server).
 
-### The portal URL will not prompt for authentication when it is added to an MCP client
+### The portal URL does not prompt for authentication when it is added to an MCP client.
 
-1. Verify that the Portal has an assigned policy.
-2. Verify that the Portal URL does not have any applied Workers, Page Rules, Custom Hostname definitions, or any other configuration that may interfere with its ability to connect to the MCP client.
+1. Verify that the portal has an assigned Access policy.
+2. Verify that the portal URL does not have any applied [Workers](/workers/configuration/routing/custom-domains/), [Page Rules](/rules/page-rules/manage/), [custom hostname](/cloudflare-for-platforms/cloudflare-for-saas/domain-support/) definitions, or any other configuration that may interfere with its ability to connect to the MCP client.

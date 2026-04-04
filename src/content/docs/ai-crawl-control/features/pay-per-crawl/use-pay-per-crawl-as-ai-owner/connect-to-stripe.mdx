@@ -11,9 +11,10 @@ import { Steps, DashButton } from "~/components";
 
 ```mermaid
 graph LR
-A[Set up your<br>Cloudflare Account] --> B[Connect to<br>Stripe]:::highlight
-B --> C[Verify your<br>AI crawler]
-C --> D[Crawl pages]
+A[Set up your<br>Cloudflare Account] --> B[Verify your<br>AI crawler]
+B --> C[Discover<br>payable content]
+C --> D[Connect to<br>Stripe]:::highlight
+D --> E[Crawl pages]
 classDef highlight fill:#F6821F,color:white
 ```
 
@@ -42,6 +43,6 @@ Cloudflare is not responsible for configuring spending limits. Ensure you have c
 
 ## Billing
 
-Charges are recorded upon successful delivery of content that is requested with valid [crawler price headers](/ai-crawl-control/features/pay-per-crawl/use-pay-per-crawl-as-ai-owner/crawl-pages/#22-include-payment-headers).
+Charges are recorded upon successful delivery of content that is requested with valid [crawler price headers](/ai-crawl-control/features/pay-per-crawl/use-pay-per-crawl-as-ai-owner/crawl-pages/#21-include-payment-headers).
 
 Invoices are created and managed via Stripe. Crawlers are responsible for setting and enforcing their own spending limits.

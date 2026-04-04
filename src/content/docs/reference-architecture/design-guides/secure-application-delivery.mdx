@@ -111,7 +111,7 @@ There are two options for creating a tunnel - [via the dashboard](/cloudflare-on
 
 A remotely-managed tunnel only requires the tunnel token to run. Anyone with access to the token will be able to run the tunnel. You can get a tunnel’s token from the dashboard or via the API as shown below. The command provided in the dashboard will install and configure cloudflared to run as a service using an auth token.
 
-In the Cloudflare dashboard, navigate to Zero Trust > Access > Tunnels. Select the "Create a tunnel" button, name the tunnel, and save.
+In the Cloudflare dashboard, navigate to Zero Trust > Networks > Connectors. Select the "Create a tunnel" button, name the tunnel, and save.
 
 ![Cloudflare allows for easily creating and naming a tunnel.](~/assets/images/reference-architecture/secure-application-delivery-design-guide/secure-app-dg-fig-8.png "Figure 8: Cloudflare Tunnel Creation.")
 
@@ -189,7 +189,7 @@ We now have secure application access to the origin(s) via Tunnel and also authe
 
 In the current setup, the origin server(s) are securely connected to the Cloudflare network via Cloudflare Tunnel and Cloudflare Access via policies enforcing authentication and other security requirements.
 
-Since Cloudflare is already set up and acting as a reverse proxy for the site, traffic is being directed through Cloudflare, so all Cloudflare services can easily be leveraged including CDN, Security Analytics, WAF, API Shield, Bot Management, Page Shield for client-side security, etc.
+Since Cloudflare is already set up and acting as a reverse proxy for the site, traffic is being directed through Cloudflare, so all Cloudflare services can easily be leveraged including CDN, Security Analytics, WAF, API Shield, Bot Management, client-side security, etc.
 
 When a DNS lookup request is made by a client for the respective website, in this case "cftestsite3.com," Cloudflare returns an anycast IP address, so all traffic is directed to the closest data center where all services will be applied before the request is forwarded over Cloudflare Tunnel to the origin server(s).
 

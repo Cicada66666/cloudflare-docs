@@ -6,82 +6,69 @@ on:
 
 jobs:
   publish:
+    if: github.repository == 'cloudflare/cloudflare-docs'
     name: Production
     runs-on: ubuntu-22.04
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: 22.x
+          node-version: 24.x
           cache: npm
-      - run: npm ci
-      - uses: actions/cache/restore@v4
+
+      - name: Restore node_modules (cache hit)
+        id: node-modules-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('package.json') }}
+
+      - name: Install node_modules (cache miss)
+        run: npm ci
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+
+      - name: Restore Astro assets from cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         with:
           path: |
             node_modules/.astro/assets
-          key: static
-      - run: npm run build
-        name: Build
+          key: astro-assets-${{ hashFiles('src/assets/**') }}
+          restore-keys: |
+            astro-assets-
+
+      - name: Build
+        run: npm run build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ENABLE_LAST_MOD_IN_SITEMAP: true
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         continue-on-error: true
         with:
           name: site-html
           path: dist
-      - run: npx wrangler deploy
-        name: Deploy to Cloudflare Workers
+
+      - name: Deploy to Cloudflare Workers
+        run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - name: Install rclone
-        run: sudo -v ; curl https://rclone.org/install.sh | sudo bash
-      - name: Build vendored Markdown
-        run: npx tsx bin/generate-index-md.ts
-      - name: Upload vendored Markdown archives to Vendored Markdown bucket
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.VENDORED_DEVDOCS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.VENDORED_DEVDOCS_SECRET_ACCESS_KEY }}
-        run: |
-          cd distmd && zip -r markdown.zip .
-          rclone copy \
-            --config ../bin/rclone.conf \
-            ./markdown.zip \
-            devdocs:vendored-markdown
-          rm markdown.zip
-          cd ..
 
-          cd distllms
-          rclone copy --max-depth 2 \
-            --config ../bin/rclone.conf \
-            . \
-            devdocs:vendored-markdown
-          cd ..
-      - name: Upload vendored Markdown files to ZT DevDocs bucket
+      - name: Notify Google Chat on failure
+        if: failure()
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.ZT_DEVDOCS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.ZT_DEVDOCS_SECRET_ACCESS_KEY }}
+          WEBHOOK_URL: ${{ secrets.CED_TEAM_ALERTS_CHANNEL_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          rclone sync \
-            --config bin/rclone.conf \
-            distmd \
-            zt:zt-dashboard-dev-docs
-      - name: Upload vendored Markdown files to AI Search DevDocs bucket
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AUTORAG_DEVDOCS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AUTORAG_DEVDOCS_SECRET_ACCESS_KEY }}
-        run: |
-          rclone sync \
-            --config bin/rclone.conf \
-            distmd \
-            autorag:developer-docs-full
-      - uses: actions/cache/save@v4
-        if: always()
-        with:
-          path: |
-            node_modules/.astro/assets
-          key: static
+          # Use jq to safely construct JSON payload
+          MESSAGE="❌ *Publish Production* workflow failed.\nActor: $ACTOR\n<https://github.com/$REPO/actions/runs/$RUN_ID|View run>"
+          JSON_PAYLOAD=$(jq -n --arg text "$MESSAGE" '{text: $text}')
+
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD"
