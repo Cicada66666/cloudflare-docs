@@ -1,0 +1,3 @@
+# Bundled GitHub Actions - these are auto-generated from TypeScript source
+# and include third-party dependencies that trigger false positives
+.github/actions/*/index.js
