@@ -3,7 +3,8 @@
 
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import * as codeOwnersUtils from "codeowners-utils";
+import * as fs from "fs";
+import * as path from "path";
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 
@@ -14,6 +15,90 @@ type Options = {
 	per_page?: number;
 	page?: number;
 };
+
+type CodeOwnerRule = {
+	pattern: string;
+	owners: string[];
+};
+
+function loadCodeOwners(cwd: string): CodeOwnerRule[] {
+	const codeownersPath = path.join(cwd, "CODEOWNERS");
+	if (!fs.existsSync(codeownersPath)) {
+		return [];
+	}
+
+	const content = fs.readFileSync(codeownersPath, "utf8");
+	const rules: CodeOwnerRule[] = [];
+
+	for (const line of content.split("\n")) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith("#")) {
+			continue;
+		}
+
+		const parts = trimmed.split(/\s+/);
+		if (parts.length >= 2) {
+			const pattern = parts[0];
+			const owners = parts.slice(1);
+			rules.push({ pattern, owners });
+		}
+	}
+
+	return rules;
+}
+
+function matchFile(
+	filePath: string,
+	rules: CodeOwnerRule[],
+): { owners: string[] } | null {
+	let matchedOwners: string[] = [];
+
+	for (const rule of rules) {
+		const pattern = rule.pattern;
+
+		let matches = false;
+		if (pattern.startsWith("/")) {
+			const patternPath = pattern.slice(1);
+			if (pattern.endsWith("/")) {
+				matches = filePath.startsWith(patternPath);
+			} else if (pattern.includes("*")) {
+				matches = globMatch(patternPath, filePath);
+			} else {
+				matches =
+					filePath === patternPath || filePath.startsWith(patternPath + "/");
+			}
+		} else if (pattern.includes("/")) {
+			if (pattern.endsWith("/")) {
+				matches = filePath.includes(pattern) || filePath.startsWith(pattern);
+			} else {
+				matches = filePath === pattern || filePath.endsWith("/" + pattern);
+			}
+		} else {
+			const fileName = filePath.split("/").pop() || "";
+			if (pattern.includes("*")) {
+				matches = globMatch(pattern, fileName);
+			} else {
+				matches = fileName === pattern;
+			}
+		}
+
+		if (matches) {
+			matchedOwners = rule.owners;
+		}
+	}
+
+	return matchedOwners.length > 0 ? { owners: matchedOwners } : null;
+}
+
+function globMatch(pattern: string, str: string): boolean {
+	const regexPattern = pattern
+		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+		.replace(/\*\*/g, ".*")
+		.replace(/\*/g, "[^/]*")
+		.replace(/\?/g, ".");
+	const regex = new RegExp(`^${regexPattern}$`);
+	return regex.test(str);
+}
 
 // @see https://octokit.github.io/rest.js/v18#pulls-list-files
 async function list(
@@ -45,7 +130,7 @@ async function list(
 (async function () {
 	try {
 		let cwd = process.cwd();
-		let codeowners = await codeOwnersUtils.loadOwners(cwd);
+		let codeowners = loadCodeOwners(cwd);
 		const token = core.getInput("GITHUB_TOKEN", { required: true });
 
 		const payload = github.context.payload;
@@ -70,8 +155,8 @@ async function list(
 		});
 
 		for (const file of files) {
-			const match = codeOwnersUtils.matchFile(file, codeowners);
-			if (match.owners) {
+			const match = matchFile(file, codeowners);
+			if (match && match.owners) {
 				for (const owner of match.owners) {
 					if (!owner.includes("/")) {
 						assignees.add(owner.replace(/^@/, ""));
